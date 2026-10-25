@@ -1,5 +1,4 @@
-from typing import List, Union
-from pydantic import AnyHttpUrl, field_validator
+from typing import List
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -12,7 +11,7 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
 
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/kikoba_db"
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:password@localhost:5432/kikoba_db"
 
     # Security
     SECRET_KEY: str = "super_secret_kikoba_development_jwt_key_vicoba_2026"
@@ -22,7 +21,8 @@ class Settings(BaseSettings):
     # Third Party Integrations
     PAYMENT_GATEWAY_URL: str = "https://api.clickpesa.com"
     PAYMENT_GATEWAY_API_KEY: str = "mock_key"
-    SMS_GATEWAY_API_KEY: str = "mock_sms_key"
+    SMS_GATEWAY_URL: str = "https://messaging-service.co.tz/api/mobile/v2/text/single"
+    SMS_GATEWAY_API_KEY: str = "cedcce9becad866f59beac1fd5a235bc"
 
     # CORS
     BACKEND_CORS_ORIGINS: List[str] = ["*"]

@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,6 +6,7 @@ from sqlalchemy import select
 from app.db.session import get_db
 from app.core.security import decode_access_token
 from app.models.user import User
+from app.models.group import GroupMember
 
 security_scheme = HTTPBearer(auto_error=False)
 
@@ -64,3 +65,35 @@ async def get_current_user(
         )
 
     return user
+
+
+async def verify_group_membership(
+    group_id: int,
+    user: User,
+    db: AsyncSession,
+    allowed_roles: Optional[List[str]] = None
+) -> GroupMember:
+    """
+    Verifies that the user is a member of the specified group and optionally checks
+    that their role is among allowed_roles (e.g. ['chairperson', 'secretary', 'treasurer']).
+    """
+    stmt = select(GroupMember).where(
+        GroupMember.group_id == group_id,
+        GroupMember.user_id == user.id
+    )
+    result = await db.execute(stmt)
+    membership = result.scalar_one_or_none()
+
+    if not membership:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a member of this group"
+        )
+
+    if allowed_roles and membership.role.lower() not in [r.lower() for r in allowed_roles]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Action requires one of the following roles: {', '.join(allowed_roles)}"
+        )
+
+    return membership

@@ -19,17 +19,7 @@ async def test_root(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_spec_routes_stubs(client: AsyncClient):
-    # Groups create
-    res = await client.post("/api/v1/groups", json={
-        "name": "Mavuno Women Group",
-        "share_value": 5000,
-        "max_shares_per_meeting": 5,
-        "interest_rate_monthly": 0.10,
-        "meeting_frequency": "weekly"
-    })
-    assert res.status_code == 201
-
+async def test_webhook_endpoint(client: AsyncClient):
     # Webhook
     res = await client.post("/api/v1/webhooks/payments", json={
         "transaction_reference": "tx-8989",

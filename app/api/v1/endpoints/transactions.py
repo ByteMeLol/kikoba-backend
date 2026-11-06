@@ -10,7 +10,7 @@ from app.models.user import User
 from app.models.group import Group, GroupMember
 from app.models.meeting import Meeting
 from app.models.transaction import Transaction
-from app.services.sms import send_sms_notification
+from app.services.payment import initiate_mobile_money_ussd_push
 
 router = APIRouter()
 
@@ -81,13 +81,15 @@ async def record_deposit(
     db.add(tx)
     await db.commit()
 
-    # Trigger USSD Push in background
+    # Trigger USSD Push in background via payment gateway
     member_user = await db.get(User, member.user_id)
     if member_user:
         background_tasks.add_task(
-            send_sms_notification,
+            initiate_mobile_money_ussd_push,
             member_user.phone_number,
-            f"USSD Push initiated for TZS {total_amount:,.2f} (VICOBA deposit). Please confirm PIN on your phone."
+            total_amount,
+            tx_ref,
+            f"VICOBA deposit for {group.name}"
         )
 
     return DepositResponse(transaction_id=tx_ref, status="pending_payment")

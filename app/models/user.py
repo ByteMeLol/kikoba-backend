@@ -14,6 +14,7 @@ class User(Base, TimestampMixin):
     hashed_pin: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="active", nullable=False)  # active, shadow, suspended
     kyc_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_superuser: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # Relationships
     group_memberships: Mapped[List["GroupMember"]] = relationship("GroupMember", back_populates="user")
@@ -25,5 +26,5 @@ class OTPVerification(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     reference_id: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
     phone_number: Mapped[str] = mapped_column(String(20), index=True, nullable=False)
-    otp_code: Mapped[str] = mapped_column(String(10), nullable=False)
+    otp_code: Mapped[str] = mapped_column(String(255), nullable=False)
     is_used: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

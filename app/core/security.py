@@ -6,8 +6,11 @@ from app.core.config import settings
 
 
 def verify_pin(plain_pin: str, hashed_pin: str) -> bool:
-    """Verify a raw 4-digit PIN against its bcrypt hash."""
-    return bcrypt.checkpw(plain_pin.encode("utf-8"), hashed_pin.encode("utf-8"))
+    """Verify a raw 4-digit PIN or OTP against its bcrypt hash."""
+    try:
+        return bcrypt.checkpw(plain_pin.encode("utf-8"), hashed_pin.encode("utf-8"))
+    except Exception:
+        return False
 
 
 def get_pin_hash(pin: str) -> str:

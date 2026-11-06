@@ -1,5 +1,7 @@
 import uuid
 import random
+import logging
+from typing import Optional
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, status
 from pydantic import BaseModel, Field
@@ -8,8 +10,11 @@ from sqlalchemy import select
 
 from app.db.session import get_db
 from app.models.user import User, OTPVerification
-from app.core.security import get_pin_hash, create_access_token
+from app.core.config import settings
+from app.core.security import get_pin_hash, verify_pin, create_access_token
 from app.services.sms import send_sms_notification
+
+logger = logging.getLogger("auth_endpoint")
 
 router = APIRouter()
 
@@ -24,6 +29,7 @@ class RegisterRequest(BaseModel):
 class RegisterResponse(BaseModel):
     message: str = "User registered, OTP sent for verification"
     reference_id: str
+    debug_otp: Optional[str] = None
 
 
 class RequestOtpRequest(BaseModel):
@@ -33,6 +39,7 @@ class RequestOtpRequest(BaseModel):
 class RequestOtpResponse(BaseModel):
     message: str = "OTP sent successfully"
     reference_id: str
+    debug_otp: Optional[str] = None
 
 
 class VerifyOtpRequest(BaseModel):
@@ -83,18 +90,21 @@ async def register_user(
         )
         db.add(new_user)
 
-    # Generate 4-digit OTP
+    # Generate 4-digit OTP and store hashed
     otp_code = f"{random.randint(1000, 9999)}"
     ref_id = str(uuid.uuid4())
+    hashed_otp = get_pin_hash(otp_code)
 
     otp_record = OTPVerification(
         reference_id=ref_id,
         phone_number=payload.phone_number,
-        otp_code=otp_code,
+        otp_code=hashed_otp,
         is_used=False
     )
     db.add(otp_record)
     await db.commit()
+
+    logger.info(f"[AUTH OTP] Generated OTP for {payload.phone_number}: {otp_code} (Ref: {ref_id})")
 
     # Queue SMS OTP sending
     background_tasks.add_task(
@@ -103,7 +113,10 @@ async def register_user(
         f"Your VICOBA verification code is: {otp_code}"
     )
 
-    return RegisterResponse(reference_id=ref_id)
+    return RegisterResponse(
+        reference_id=ref_id,
+        debug_otp=otp_code if (settings.DEBUG or settings.ENVIRONMENT == "development") else None
+    )
 
 
 @router.post("/request-otp", response_model=RequestOtpResponse, status_code=status.HTTP_200_OK)
@@ -129,15 +142,18 @@ async def request_otp(
 
     otp_code = f"{random.randint(1000, 9999)}"
     ref_id = str(uuid.uuid4())
+    hashed_otp = get_pin_hash(otp_code)
 
     otp_record = OTPVerification(
         reference_id=ref_id,
         phone_number=payload.phone_number,
-        otp_code=otp_code,
+        otp_code=hashed_otp,
         is_used=False
     )
     db.add(otp_record)
     await db.commit()
+
+    logger.info(f"[AUTH OTP] Login OTP for {payload.phone_number}: {otp_code} (Ref: {ref_id})")
 
     background_tasks.add_task(
         send_sms_notification,
@@ -145,7 +161,10 @@ async def request_otp(
         f"Your VICOBA login OTP is: {otp_code}"
     )
 
-    return RequestOtpResponse(reference_id=ref_id)
+    return RequestOtpResponse(
+        reference_id=ref_id,
+        debug_otp=otp_code if (settings.DEBUG or settings.ENVIRONMENT == "development") else None
+    )
 
 
 @router.post("/verify", response_model=TokenResponse, status_code=status.HTTP_200_OK)
@@ -169,7 +188,14 @@ async def verify_otp(
             detail="Invalid or expired OTP reference"
         )
 
-    if otp_record.otp_code != payload.otp:
+    # Secure verification against bcrypt hash (or fallback plain text for backward compatibility)
+    is_valid = False
+    try:
+        is_valid = (otp_record.otp_code == payload.otp) or verify_pin(payload.otp, otp_record.otp_code)
+    except Exception:
+        is_valid = False
+
+    if not is_valid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Incorrect OTP code"

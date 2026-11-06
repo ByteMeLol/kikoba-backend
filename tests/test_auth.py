@@ -26,12 +26,15 @@ async def test_register_and_verify_flow(client: AsyncClient, db_session: AsyncSe
     assert user.full_name == "Amina Juma"
     assert user.kyc_verified is True
 
-    # Retrieve generated OTP from DB
+    # Retrieve generated OTP and verify it is securely hashed in DB
+    generated_otp = data["debug_otp"]
     otp_stmt = select(OTPVerification).where(OTPVerification.reference_id == ref_id)
     otp_record = (await db_session.execute(otp_stmt)).scalar_one_or_none()
     assert otp_record is not None
     assert otp_record.is_used is False
-    generated_otp = otp_record.otp_code
+    # OTP in database must be hashed, not plain text!
+    assert otp_record.otp_code != generated_otp
+    assert otp_record.otp_code.startswith("$2")
 
     # 2. Test OTP Verification with wrong OTP -> 400
     bad_res = await client.post("/api/v1/auth/verify", json={

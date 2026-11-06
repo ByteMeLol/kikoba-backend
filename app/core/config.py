@@ -21,8 +21,14 @@ class Settings(BaseSettings):
     # Third Party Integrations
     PAYMENT_GATEWAY_URL: str = "https://api.clickpesa.com"
     PAYMENT_GATEWAY_API_KEY: str = "mock_key"
-    SMS_GATEWAY_URL: str = "https://messaging-service.co.tz/api/mobile/v2/text/single"
-    SMS_GATEWAY_API_KEY: str = "cedcce9becad866f59beac1fd5a235bc"
+    PAYMENT_GATEWAY_CLIENT_ID: str = "mock_client_id"
+
+    # SMS Gateway (Elive - message.elive.co.tz)
+    SMS_GATEWAY_URL: str = "https://message.elive.co.tz/api/v1/vendor/message/send"
+    ELIVE_API_KEY: str = ""
+    ELIVE_API_SECRET: str = ""
+    SMS_SENDER_ID: str = "VICOBA"
+    ELIVE_DELIVERY_REPORT_URL: str = ""
 
     # CORS
     BACKEND_CORS_ORIGINS: List[str] = ["*"]

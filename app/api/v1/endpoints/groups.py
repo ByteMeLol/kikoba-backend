@@ -17,16 +17,22 @@ router = APIRouter()
 
 
 class CreateGroupRequest(BaseModel):
-    name: str = Field(..., examples=["Mavuno Women Group"])
-    share_value: float = Field(..., examples=[5000.0])
-    max_shares_per_meeting: int = Field(..., examples=[5])
-    interest_rate_monthly: float = Field(..., examples=[0.10])
+    name: str = Field(..., min_length=3, max_length=150, examples=["Mavuno Women Group"])
+    share_value: float = Field(..., gt=0, examples=[5000.0])
+    max_shares_per_meeting: int = Field(..., ge=1, le=50, examples=[5])
+    interest_rate_monthly: float = Field(..., ge=0.0, le=0.50, examples=[0.10])
     meeting_frequency: str = Field(..., examples=["weekly"])
 
 
 class CreateGroupResponse(BaseModel):
     group_id: int
     status: str = "active"
+
+
+class ApproveGroupResponse(BaseModel):
+    group_id: int
+    status: str
+    message: str
 
 
 class AddMemberRequest(BaseModel):
@@ -61,14 +67,50 @@ async def create_group(
 ):
     """
     Creates a new VICOBA group, sets bylaws, and initializes the first cycle.
+    Enforces pre-activation checks (KYC verification, valid bylaws, duplicate protection).
     The creator automatically becomes the Chairperson.
     """
+    # 1. Pre-activation check: Creator must have completed KYC
+    if not current_user.kyc_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Creator must complete KYC verification before creating a group"
+        )
+
+    # 2. Pre-activation check: Meeting frequency validation
+    frequency = payload.meeting_frequency.strip().lower()
+    if frequency not in ["weekly", "biweekly", "monthly"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Meeting frequency must be one of: weekly, biweekly, monthly"
+        )
+
+    # 3. Pre-activation check: Share value minimum check
+    if payload.share_value < 500.0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Share value must be at least 500 TZS"
+        )
+
+    # 4. Pre-activation check: Duplicate group name check
+    cleaned_name = payload.name.strip()
+    dup_stmt = select(Group).where(
+        func.lower(Group.name) == cleaned_name.lower(),
+        Group.status == "active"
+    )
+    dup_res = await db.execute(dup_stmt)
+    if dup_res.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An active group with this name already exists"
+        )
+
     new_group = Group(
-        name=payload.name,
+        name=cleaned_name,
         share_value=payload.share_value,
         max_shares_per_meeting=payload.max_shares_per_meeting,
         interest_rate_monthly=payload.interest_rate_monthly,
-        meeting_frequency=payload.meeting_frequency,
+        meeting_frequency=frequency,
         created_by_id=current_user.id,
         status="active"
     )
@@ -94,6 +136,44 @@ async def create_group(
     await db.commit()
 
     return CreateGroupResponse(group_id=new_group.id, status=new_group.status)
+
+
+@router.post("/{group_id}/approve", response_model=ApproveGroupResponse, status_code=status.HTTP_200_OK)
+async def approve_group(
+    group_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Administrative approval endpoint to approve and activate a pending group.
+    Requires Super Admin or Chairperson permissions.
+    """
+    group = await db.get(Group, group_id)
+    if not group:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+
+    if not current_user.is_superuser:
+        await verify_group_membership(
+            group_id=group_id,
+            user=current_user,
+            db=db,
+            allowed_roles=["chairperson"]
+        )
+
+    if group.status == "active":
+        return ApproveGroupResponse(
+            group_id=group.id,
+            status=group.status,
+            message="Group is already active"
+        )
+
+    group.status = "active"
+    await db.commit()
+    return ApproveGroupResponse(
+        group_id=group.id,
+        status=group.status,
+        message="Group successfully approved and activated"
+    )
 
 
 @router.post("/{group_id}/members", response_model=AddMemberResponse, status_code=status.HTTP_201_CREATED)

@@ -179,20 +179,31 @@ async def test_meeting_lifecycle_and_attendance_fines(client: AsyncClient, setup
     m2_id = mem2_res.json()["member_id"]
 
     # 1. Non-admin regular member tries to start meeting -> 403 Forbidden
+    from datetime import date, timedelta
     forbidden_res = await client.post(
         f"/api/v1/groups/{group_id}/meetings",
         headers={"Authorization": f"Bearer {regular_token}"},
-        json={"scheduled_date": "2026-09-07"}
+        json={"scheduled_date": (date.today() + timedelta(days=1)).isoformat()}
     )
     assert forbidden_res.status_code == 403
 
-    # 2. Admin starts meeting -> 201 Created
+    # 2a. Admin tries to schedule meeting in the past (e.g. 2020-10-07 from user test) -> 400 Bad Request
+    past_res = await client.post(
+        f"/api/v1/groups/{group_id}/meetings",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"scheduled_date": "2020-10-07"}
+    )
+    assert past_res.status_code == 400
+    assert "Meeting date cannot be in the past" in past_res.json()["detail"]
+
+    # 2b. Admin starts meeting today -> 201 Created with status 'in_progress'
     meeting_res = await client.post(
         f"/api/v1/groups/{group_id}/meetings",
         headers={"Authorization": f"Bearer {admin_token}"},
-        json={"scheduled_date": "2026-09-07"}
+        json={"scheduled_date": date.today().isoformat()}
     )
     assert meeting_res.status_code == 201
+    assert meeting_res.json()["status"] == "in_progress"
     meeting_id = meeting_res.json()["meeting_id"]
 
     # 3. Record attendance: m1 is late (fine: 1000), m2 is absent

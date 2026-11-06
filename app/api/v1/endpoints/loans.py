@@ -14,6 +14,7 @@ from app.models.transaction import Transaction
 from app.models.loan import Loan
 from app.core.security import verify_pin
 from app.services.sms import send_sms_notification
+from app.services.payment import initiate_mobile_money_ussd_push, disburse_b2c_payout
 
 router = APIRouter()
 
@@ -149,15 +150,17 @@ async def approve_and_disburse_loan(
     loan.disbursed_at = datetime.now(timezone.utc)
     await db.commit()
 
-    # Get borrowing member info to notify
+    # Disburse B2C payout to borrower via payment gateway
     borrower_member = await db.get(GroupMember, loan.member_id)
     if borrower_member:
         borrower_user = await db.get(User, borrower_member.user_id)
         if borrower_user:
             background_tasks.add_task(
-                send_sms_notification,
+                disburse_b2c_payout,
                 borrower_user.phone_number,
-                f"Your loan of TZS {loan.amount:,.2f} has been approved and disbursed. Ref: {payout_ref}"
+                loan.amount,
+                payout_ref,
+                f"VICOBA loan payout (Loan #{loan.id})"
             )
 
     return ApproveLoanResponse(status="disbursed", payout_reference=payout_ref)
@@ -198,11 +201,13 @@ async def repay_loan(
     db.add(tx)
     await db.commit()
 
-    # Trigger USSD Push
+    # Trigger USSD Push via payment gateway
     background_tasks.add_task(
-        send_sms_notification,
+        initiate_mobile_money_ussd_push,
         current_user.phone_number,
-        f"USSD Push initiated for loan repayment of TZS {payload.amount:,.2f}. Please confirm on your phone."
+        payload.amount,
+        tx_ref,
+        "VICOBA loan repayment"
     )
 
     return RepayLoanResponse(transaction_id=tx_ref, status="pending_payment")

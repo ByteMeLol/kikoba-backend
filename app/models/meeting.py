@@ -1,6 +1,6 @@
 from typing import List, Optional
 from datetime import date, datetime
-from sqlalchemy import String, Integer, Numeric, Boolean, Date, DateTime, ForeignKey
+from sqlalchemy import String, Integer, Numeric, Boolean, Date, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, TimestampMixin
 
@@ -22,6 +22,9 @@ class Meeting(Base, TimestampMixin):
 
 class Attendance(Base, TimestampMixin):
     __tablename__ = "attendances"
+    __table_args__ = (
+        UniqueConstraint("meeting_id", "member_id", name="uq_meeting_member_attendance"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     meeting_id: Mapped[int] = mapped_column(ForeignKey("meetings.id"), nullable=False)

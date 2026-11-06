@@ -3,6 +3,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.user import User, OTPVerification
+from app.core.config import settings
 
 
 @pytest.mark.asyncio
@@ -131,3 +132,39 @@ async def test_request_otp_non_registered_user(client: AsyncClient):
 async def test_unauthorized_passbook_access(client: AsyncClient):
     res = await client.get("/api/v1/users/me")
     assert res.status_code == 401
+
+
+def test_debug_otp_is_never_exposed_in_production():
+    original_environment = settings.ENVIRONMENT
+    original_debug = settings.DEBUG
+    original_expose_debug_otp = settings.EXPOSE_DEBUG_OTP
+    try:
+        settings.ENVIRONMENT = "production"
+        settings.DEBUG = True
+        settings.EXPOSE_DEBUG_OTP = True
+
+        from app.api.v1.endpoints.auth import get_debug_otp
+
+        assert get_debug_otp("1234") is None
+    finally:
+        settings.ENVIRONMENT = original_environment
+        settings.DEBUG = original_debug
+        settings.EXPOSE_DEBUG_OTP = original_expose_debug_otp
+
+
+def test_debug_otp_can_be_exposed_for_testers():
+    original_environment = settings.ENVIRONMENT
+    original_debug = settings.DEBUG
+    original_expose_debug_otp = settings.EXPOSE_DEBUG_OTP
+    try:
+        settings.ENVIRONMENT = "testing"
+        settings.DEBUG = False
+        settings.EXPOSE_DEBUG_OTP = True
+
+        from app.api.v1.endpoints.auth import get_debug_otp
+
+        assert get_debug_otp("1234") == "1234"
+    finally:
+        settings.ENVIRONMENT = original_environment
+        settings.DEBUG = original_debug
+        settings.EXPOSE_DEBUG_OTP = original_expose_debug_otp

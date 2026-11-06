@@ -82,6 +82,10 @@ As specified in the official specification document:
 - [x] `POST /api/v1/auth/verify`: OTP verification, reference invalidation, and JWT token issuance.
 - [x] `GET /api/v1/users/me`: Authenticated digital passbook calculation (shares, share value total, social fund balance, active loans).
 
+For a tester environment without SMS delivery, set `EXPOSE_DEBUG_OTP=True` and use a non-production
+`ENVIRONMENT` value. The generated OTP is returned as `debug_otp` by registration and login OTP
+responses. OTPs are never returned in responses when `ENVIRONMENT=production`.
+
 ---
 
 ### Step 4: Group & Meeting Management ✅

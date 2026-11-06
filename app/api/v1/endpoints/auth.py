@@ -19,6 +19,15 @@ logger = logging.getLogger("auth_endpoint")
 router = APIRouter()
 
 
+def get_debug_otp(otp_code: str) -> Optional[str]:
+    """Expose OTPs only for explicitly enabled non-production environments."""
+    if settings.ENVIRONMENT.lower() == "production":
+        return None
+    if settings.DEBUG or settings.EXPOSE_DEBUG_OTP:
+        return otp_code
+    return None
+
+
 class RegisterRequest(BaseModel):
     phone_number: str = Field(..., examples=["+255700000000"])
     full_name: str = Field(..., examples=["Amina Juma"])
@@ -115,7 +124,7 @@ async def register_user(
 
     return RegisterResponse(
         reference_id=ref_id,
-        debug_otp=otp_code if (settings.DEBUG or settings.ENVIRONMENT == "development") else None
+        debug_otp=get_debug_otp(otp_code)
     )
 
 
@@ -163,7 +172,7 @@ async def request_otp(
 
     return RequestOtpResponse(
         reference_id=ref_id,
-        debug_otp=otp_code if (settings.DEBUG or settings.ENVIRONMENT == "development") else None
+        debug_otp=get_debug_otp(otp_code)
     )
 
 

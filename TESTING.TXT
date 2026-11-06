@@ -1,0 +1,3 @@
+For a tester environment without SMS delivery, set `EXPOSE_DEBUG_OTP=True` and use a non-production
+`ENVIRONMENT` value. The generated OTP is returned as `debug_otp` by registration and login OTP
+responses. OTPs are never returned in responses when `ENVIRONMENT=production`.
